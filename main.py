@@ -18,68 +18,84 @@ print(f"Key starts with: {openai_api_key[:10]}...")
 openai_client = OpenAI(api_key=openai_api_key)
 print("OpenAI client configured.")
 
+
+# Define the mapping for explanation levels
 explanation_levels = {
-    1: "like I'm five",
-    2: "like I'm a high school student",
-    3: "like I'm a college student",
-    4: "like I'm a graduate student",
-    5: "like I'm an expert in the field"
+    1: "like I'm 5 years old",
+    2: "like I'm 10 years old",
+    3: "like a high school student",
+    4: "like a college student",
+    5: "like an expert in the field",
 }
 
-def stream_ai_tutor_response_with_level(user_question, explanation_level):
-    
-    level_desc = explanation_levels.get(explanation_level, "clear and concise")
-    
-    system_prompt = f"Your are a helpful AI tutor. Explain the following concepts {level_desc}"
-    
+# Create a new function that accepts question and level and streams the response
+def stream_ai_tutor_response_with_level(user_question, explanation_level_value):
+    """
+    Streams AI Tutor response based on user question and selected explanation level.
+
+    Args:
+        user_question (str): The question from the user.
+        explanation_level_value (int): The value from the slider (1-5).
+
+    Yields:
+        str: Chunks of the AI's response.
+    """
+
+    # Get the descriptive text for the chosen level
+    level_description = explanation_levels.get(
+        explanation_level_value, "clearly and concisely"
+    )  # Default if level not found
+
+    # Construct the system prompt dynamically based on the level
+    system_prompt = f"You are a helpful AI Tutor. Explain the following concept {level_description}."
+
+    print(f"DEBUG: Using System Prompt: '{system_prompt}'")  # For checking
+
     try:
         stream = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content":system_prompt},
-                {"role": "user", "content": user_question}
-            ],
-            temperature=0.7,
-            stream=True
+            model = "gpt-4o-mini",
+            messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_question}],
+            temperature = 0.7,
+            stream = True,
         )
-        
-        full_response = ""
-        
-        #Now we iterate through the stream and print each chunk as it arrives
-        for chunk in stream:
-            if 'choices' in chunk and len(chunk['choices']):
-                text_chunk = chunk.choices[0].delta.content
-                
-                #Add this chucnk to the full response
-                full_response += text_chunk
-                
-                #yeild makes the text appear to be typing in real time
-                yield full_response
-                
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        yield f"Sorry, something went wrong {e}"
-        
-        
-# Next we make the Gradio UI
 
-ai_tutor_interface_slider = gr.Interface(
-    fn=stream_ai_tutor_response_with_level,
+        # Iterate through the response chunks
+        full_response = ""  # Keep track of the full response if needed later
+
+        # Loop through each chunk of the response as it arrives
+        for chunk in stream:
+            # Check if this chunk contains actual text content
+            if chunk.choices[0].delta and chunk.choices[0].delta.content:
+                # Extract the text from this chunk
+                text_chunk = chunk.choices[0].delta.content
+                # Add this chunk to our growing response
+                full_response += text_chunk
+                # 'yield' is special - it sends the current state of the response to Gradio
+                # This makes the text appear to be typing in real-time
+                yield full_response
+
+    except Exception as e:
+        print(f"An error occurred during streaming: {e}")
+        yield f"Sorry, I encountered an error: {e}"
+        
+# Define the Gradio interface with both Textbox and slider inputs
+ai_tutor_interface_slider = gr.Interface(fn = stream_ai_tutor_response_with_level,  # Function now takes 2 args
     inputs=[
-        gr.Textbox(lines=3, placeholder="Ask me anything", label="Your Question"),
+        gr.Textbox(lines = 3, placeholder = "Ask the AI Tutor a question...", label = "Your Question"),
         gr.Slider(
-            minimum=1,
-            maximum=5,
-            step=1,
-            label="Explanation Level",
-            value=3,
+            minimum = 1,
+            maximum = 5,
+            step = 1,  # Only allow whole numbers
+            value = 3,  # Default level (high school)
+            label = "Explanation Level",  # Label for the slider
         ),
-        ],
-    outputs= gr.Textbox(label="AI Tutor Response (streaming)", container=True, lines=10),
-    title="Advanced AI Tutor with Explanation Levels",
-    description="Ask questions and get explanations tailored to your level of understanding.",
-    allow_flagging="never",
+    ],
+    outputs = gr.Markdown(label = "AI Tutor's Explanation (Streaming)", container = True, height = 250),
+    title = "🎓 Advanced AI Tutor",
+    description = "Ask a question and select the desired level of explanation using the slider.",
+    allow_flagging = "never",
 )
 
-print("Launching Gradio interface...")
+# Launch the advanced interface
+print("Launching Advanced Gradio Interface with Slider...")
 ai_tutor_interface_slider.launch()
